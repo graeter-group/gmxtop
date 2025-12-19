@@ -41,7 +41,8 @@ top_dict = read_top(Path("hexala.top"), ffdir=Path("amber99sb-star-ildnp.ff"))
 original_top = Topology(top_dict)
 
 # %% [markdown]
-# # 1. Manipulation of partial charges
+# # 1. Manipulation of nonbonded parameters
+# ## 1.1 Manipulation of partial charges
 # Example: Change the charge of the CB atom of the first Ala residue and its attached H atoms
 # %% [markdown]
 # Inital charges
@@ -67,6 +68,26 @@ for atom_id in ["11", "12", "13", "14"]:
 # Finally, we can write the modified topology to a new file, called "hexala_mod_charges.top". 
 # %% 
 out_path = Path("hexala_mod_charges.top")
+top.to_path(out_path)
+# %% [markdown]
+# ## 1.2. Manipulation of Lennard-Jones parameters
+# Example: Change the Lennard-Jones parameters of the CT atom type. 
+# %% [markdown]
+# Inital LJ parameters:
+# %%
+top = deepcopy(original_top)
+print(top.ff.atomtypes["CT"])
+# %% [markdown]
+# Modify LJ parameters:
+# %%
+top.ff.atomtypes["CT"].sigma = "0.35"  # New sigma value in nm
+top.ff.atomtypes["CT"].epsilon = "0.8"  # New epsilon value in kJ mol-1
+
+print(top.ff.atomtypes["CT"])
+# %% [markdown]
+# Now, let's write the modified topology to a new file, called "hexala_mod_lj.top".
+# %%
+out_path = Path("hexala_mod_lj.top")
 top.to_path(out_path)
 # %% [markdown]
 # # 2. Manipulation of bonded parameters
