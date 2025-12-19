@@ -197,6 +197,7 @@ ATOMTYPE_BONDORDER_FLAT = {
     "N3": 4,
     "P": 4,
     "SO": 4,
+    "CX": 4,
 }
 
 AA3 = [
