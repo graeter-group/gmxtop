@@ -622,3 +622,12 @@ class TestDimerization:
             "46", top_target.ff
         )
         assert list(atom_impropers.keys()) == [("46", "53", "51", "52")]
+
+
+class TestBAZ:
+    def test_no_warning_on_loading(self, filedir, caplog):
+        caplog.set_level(logging.WARNING)
+        Topology.from_path(filedir / "baz.top", ffdir=filedir / "amber14sb.ff")
+        assert (
+            not caplog.records
+        ), f"Logger.warning was raised during loading baz.top: {[r.message for r in caplog.records]}"
