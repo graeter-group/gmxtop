@@ -42,12 +42,18 @@ ATOM_ID_FIELDS = {
 FFFUNC = {
     "mult_proper_dihedral": "9",
     "mult_improper_dihedral": "4",
+    "harmonic_improper_dihedral": "2",
     "harmonic_bond": "1",
     "morse_bond": "3",
     "harmonic_angle": "1",
     "pair": "1",
     "coulomb_pair": "2",
 }
+
+IMPROPER_DIHEDRAL_FFFUNCS = (
+    FFFUNC["mult_improper_dihedral"],
+    FFFUNC["harmonic_improper_dihedral"],
+)
 
 RESNR_ID_FIELDS = {
     "atoms": [2],
