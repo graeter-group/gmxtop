@@ -697,3 +697,22 @@ class TestHarmonicImpropers:
         og_impropers = deepcopy(top_harmonic_impropers.improper_dihedrals)
         top_harmonic_impropers.reindex_atomnrs()
         assert top_harmonic_impropers.improper_dihedrals == og_impropers
+
+    def test_cmap_stays_in_moleculetype(self, top_path_harmonic: Path, tmp_path):
+        raw = read_top(top_path_harmonic)
+        assert "cmap" not in raw
+        assert raw["moleculetype_Protein"]["subsections"]["cmap"]["content"] == [
+            ["5", "7", "9", "15", "17", "1"]
+        ]
+
+        top = Topology(deepcopy(raw))
+        out_path = tmp_path / "baz_charmm27_pp_out.top"
+        top.to_path(out_path)
+        headers = [l for l in out_path.read_text().splitlines() if l.startswith("[")]
+        assert (
+            headers.index("[ cmaptypes ]")
+            < headers.index("[ moleculetype ]")
+            < headers.index("[ dihedrals ]")
+            < headers.index("[ cmap ]")
+            < headers.index("[ system ]")
+        )

@@ -246,6 +246,7 @@ def read_top(
         "angles",
         "dihedrals",
         "impropers",
+        "cmap",
         "pairs_nb",
         "exclusions",
         "constraints",
