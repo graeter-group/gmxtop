@@ -15,7 +15,7 @@ The `gmxtop` project derives this functionality from the [kimmdy](https://github
 The `kimmdy` project is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html) and, as a derivative work, the `gmxtop` project is distributed under the same license. See [LICENSE](./LICENSE) for details.
 
 ### Limitations
-* CMAP corrections (`[ cmaptypes ]`, `[ cmap ]`) are currently not supported.
+* CMAP corrections (`[ cmaptypes ]`, `[ cmap ]`) are only passed through: they are read and written back unchanged, but not parsed into objects. Hence, CMAP terms are not generated for new residues and their atom numbers are not updated when atoms are renumbered.
 * CHARMM force field files use `#ifdef`/`#ifndef` statements within sections (e.g. `#ifdef HEAVY_H` in `[ atomtypes ]`). This is not supported yet. Thus, CHARMM topologies can not be read directly. As a workaround, preprocess the topology with `grompp` first and use the resulting standalone topology:
 ```bash
 gmx grompp -f empty.mdp -c conf.gro -p topol.top -pp topol_pp.top
