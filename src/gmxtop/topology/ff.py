@@ -29,7 +29,7 @@ import textwrap
 from pathlib import Path
 from typing import Optional
 
-from gmxtop.constants import FFFUNC
+from gmxtop.constants import FFFUNC, IMPROPER_DIHEDRAL_FFFUNCS
 from gmxtop.parsing import read_top
 from gmxtop.topology.atomic import (
     AngleId,
@@ -69,6 +69,10 @@ class FF:
         self.improper_dihedraltypes: dict[ImproperDihedralId, DihedralType] = {}
         self.residuetypes: dict[str, ResidueType] = {}
         self.nonbond_params: dict[BondId, NonbondParamType] = {}
+        # function type of improper dihedrals generated from residuetypes,
+        # read from the improper dihedraltypes or else from
+        # [ bondedtypes ] of the residuetypes files
+        self.improper_funct: str = FFFUNC["mult_improper_dihedral"]
 
         ffdir: Optional[Path] = top["ffdir"]
 
@@ -108,7 +112,7 @@ class FF:
                 dihedraltype = DihedralType.from_top_line(l)
                 # proper dihedrals can be defined multiple times
                 # with a different phase
-                if dihedraltype.funct == FFFUNC["mult_improper_dihedral"]:
+                if dihedraltype.funct in IMPROPER_DIHEDRAL_FFFUNCS:
                     self.improper_dihedraltypes[
                         (dihedraltype.i, dihedraltype.j, dihedraltype.k, dihedraltype.l)
                     ] = dihedraltype
@@ -136,6 +140,16 @@ class FF:
                             )
                         ] = dihedraltype
 
+        # grompp takes the improper parameters from the dihedraltypes, so their
+        # funct takes precedence over [ bondedtypes ] of the residuetypes files,
+        # which may belong to a different forcefield, e.g. for a topology without
+        # #include the ffdir is guessed from any *.ff directory next to it.
+        dihedraltype_improper_functs = {
+            t.funct for t in self.improper_dihedraltypes.values()
+        }
+        if len(dihedraltype_improper_functs) == 1:
+            self.improper_funct = next(iter(dihedraltype_improper_functs))
+
         if residuetypes_path:
             logger.debug(f"Using specified residuetypes file: {residuetypes_path}")
             residuetypes_paths = [residuetypes_path]
@@ -148,17 +162,32 @@ class FF:
                 ffdir / x for x in ["rna.rtp", "dna.rtp", "aminoacids.rtp"]
             ]
 
+        improper_functs = []
         for residuetypes_path in residuetypes_paths:
             if not residuetypes_path.exists():
                 logger.warning(f"{residuetypes_path} not found in ffdir.")
                 continue
             residuetypes_dict = read_top(residuetypes_path, use_gmx_dir=False)
+            if bondedtypes := get_top_section(residuetypes_dict, "bondedtypes"):
+                # ; bonds angles dihedrals impropers ...
+                improper_functs.append(bondedtypes[0][3])
             for k, v in residuetypes_dict.items():
                 if k.startswith("BLOCK") or k in ["bondedtypes", "ffdir", "define"]:
                     continue
                 if not v.get("subsections"):
                     raise AssertionError(f"key {k} has no subsections, only {v}.")
                 self.residuetypes[k] = ResidueType.from_section(k, v["subsections"])
+
+        if improper_functs:
+            if len(dihedraltype_improper_functs) != 1:
+                self.improper_funct = improper_functs[0]
+            if set(improper_functs) != {self.improper_funct}:
+                logger.warning(
+                    f"Improper dihedral function types {improper_functs} in "
+                    f"[ bondedtypes ] of {[str(p) for p in residuetypes_paths]} "
+                    f"differ from the one used ({self.improper_funct}). "
+                    "The residuetypes may not belong to the forcefield of the topology."
+                )
 
     def __str__(self) -> str:
         return textwrap.dedent(

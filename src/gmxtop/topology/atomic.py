@@ -484,11 +484,12 @@ class Dihedral:
     """Information about one proper or improper dihedral
 
     A class containing dihedral information as in the dihedrals section of the topology.
-    Improper dihedrals have funct 4.
-    Proper dihedrals have funct != 4, mostly funct 9.
+    Improper dihedrals have funct 4 (periodic) or funct 2 (harmonic).
+    Proper dihedrals have any other funct, mostly funct 9.
 
     Note that proper dihedrals of type 9 can be defined multiple times, for different
     periodicities. This is why would-be parameter c2 is called periodicity.
+    Harmonic impropers (funct 2) have no periodicity, there c2 is the B-state xi0.
 
     From gromacs topology:
     ; ai aj ak al funct c0 c1 c2 c3 c4 c5
@@ -534,7 +535,8 @@ class MultipleDihedrals:
     Multiple ``Dihedral``s with the same ai, aj, ak, al
     but different periodicities.
     funct should always be "9" when the length of dihedrals is > 1.
-    The key of the dihedrals dict is the periodicity (c2).
+    The key of the dihedrals dict is the periodicity (c2),
+    or "" for harmonic impropers (funct 2).
     """
 
     ai: str
@@ -551,14 +553,19 @@ class DihedralType:
 
     A class containing dihedral type information as in the dihedraltypes
     section of the forcefield.
-    Improper dihedrals have funct 4. Proper dihedrals have funct 9.
+    Improper dihedrals have funct 4 (periodic) or funct 2 (harmonic).
+    Proper dihedrals have funct 9.
 
     Note that proper dihedrals of type 9 can be defined multiple times, for different
     periodicities. This is why would-be parameter c2 is called periodicity and part of
     the `id`.
+    Harmonic impropers (funct 2) have no periodicity, there c2 is the B-state xi0
+    and not part of the `id`.
 
     From gromacs version of the amber* ff:
     ; i j k l func phase kd pn
+    From gromacs version of the charmm* ff:
+    ; i j k l func q0 cq
     """
 
     i: str
@@ -577,17 +584,24 @@ class DihedralType:
 
     @classmethod
     def from_top_line(cls, l: list[str]):
+        funct = l[4]
         periodicity = field_or_none(l, 7)
-        if periodicity is None:
-            periodicity = "2"
+        if funct == FFFUNC["harmonic_improper_dihedral"]:
+            if periodicity is None:
+                periodicity = ""
+            id_suffix = ""
+        else:
+            if periodicity is None:
+                periodicity = "2"
+            id_suffix = ":::" + periodicity
         return cls(
             i=l[0],
             j=l[1],
             k=l[2],
             l=l[3],
-            id="---".join(l[:4]) + ":::" + periodicity,
-            id_sym="---".join(reversed(l[:4])) + ":::" + periodicity,
-            funct=l[4],
+            id="---".join(l[:4]) + id_suffix,
+            id_sym="---".join(reversed(l[:4])) + id_suffix,
+            funct=funct,
             c0=l[5],
             c1=l[6],
             periodicity=periodicity,
@@ -655,6 +669,7 @@ class ResidueImproperSpec:
     """Information about one improper dihedral in a residue
 
     ; atom1 atom2 atom3 atom4 c0(q0) c1(cp) c2(mult)
+    For harmonic impropers (funct 2): c0(xi0) c1(kxi)
     """
 
     atom1: str

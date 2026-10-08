@@ -31,6 +31,7 @@ import pytest
 from hypothesis import HealthCheck, Phase, given, settings
 from hypothesis import strategies as st
 
+from gmxtop.constants import FFFUNC
 from gmxtop.topology.atomic import *
 from gmxtop.utils import get_gmx_dir
 from gmxtop.parsing import TopologyDict, read_top
@@ -631,3 +632,68 @@ class TestBAZ:
         assert (
             not caplog.records
         ), f"Logger.warning was raised during loading baz.top: {[r.message for r in caplog.records]}"
+
+
+class TestHarmonicImpropers:
+    @pytest.fixture
+    def top_path_harmonic(self, filedir) -> Path:
+        return filedir / "baz_charmm27_pp.top"
+
+    @pytest.fixture
+    def top_harmonic_impropers(self, top_path_harmonic) -> Topology:
+        return Topology.from_path(top_path_harmonic)
+
+    def test_ff(self, top_harmonic_impropers: Topology, hexala_top_fix: Topology):
+        ff = top_harmonic_impropers.ff
+        # from the improper dihedraltypes, which take precedence over the
+        # [ bondedtypes ] of the amber ffdir guessed next to the standalone topology
+        assert ff.improper_funct == FFFUNC["harmonic_improper_dihedral"]
+        assert hexala_top_fix.ff.improper_funct == FFFUNC["mult_improper_dihedral"]
+
+        assert {t.funct for t in ff.proper_dihedraltypes.values()} == {
+            FFFUNC["mult_proper_dihedral"]
+        }
+        assert {t.funct for t in ff.improper_dihedraltypes.values()} == {
+            FFFUNC["harmonic_improper_dihedral"]
+        }
+        improper_type = ff.improper_dihedraltypes[("O", "X", "X", "C")]
+        assert improper_type.id == "O---X---X---C"
+        assert improper_type.periodicity == ""
+        assert (improper_type.c0, improper_type.c1) == ("0.0000", "1004.16")
+        # C CH3 +N O of ACE, the central atom comes first,
+        # so the type matches in reversed order
+        types = [top_harmonic_impropers.atoms[nr].type for nr in ("5", "1", "7", "6")]
+        assert types == ["C", "CT3", "NH1", "O"]
+        assert (
+            match_atomic_item_to_atomic_type(types, ff.improper_dihedraltypes)
+            == improper_type
+        )
+
+    def test_parse_and_write(self, top_path_harmonic: Path):
+        raw = read_top(top_path_harmonic)
+        top = Topology(deepcopy(raw))
+
+        assert len(top.proper_dihedrals) == 41
+        assert top.improper_dihedrals.keys() == {
+            ("5", "1", "7", "6"),
+            ("7", "5", "9", "8"),
+            ("15", "9", "17", "16"),
+            ("15", "19", "17", "16"),
+            ("17", "15", "19", "18"),
+        }
+        for impropers in top.improper_dihedrals.values():
+            assert impropers.funct == FFFUNC["harmonic_improper_dihedral"]
+            assert impropers.dihedrals.keys() == {""}
+
+        top._update_dict()
+        assert (
+            top.top[f"moleculetype_{top.selected_moleculetype}"]["subsections"][
+                "dihedrals"
+            ]["content"]
+            == raw["moleculetype_Protein"]["subsections"]["dihedrals"]["content"]
+        )
+
+    def test_reindex_keeps_harmonic_impropers(self, top_harmonic_impropers: Topology):
+        og_impropers = deepcopy(top_harmonic_impropers.improper_dihedrals)
+        top_harmonic_impropers.reindex_atomnrs()
+        assert top_harmonic_impropers.improper_dihedrals == og_impropers

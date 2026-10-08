@@ -34,6 +34,7 @@ from gmxtop.constants import (
     ATOM_ID_FIELDS,
     ATOMTYPE_BONDORDER_FLAT,
     FFFUNC,
+    IMPROPER_DIHEDRAL_FFFUNCS,
     RESNR_ID_FIELDS,
 )
 from gmxtop.parsing import TopologyDict, empty_section, read_top, write_top
@@ -218,12 +219,16 @@ class MoleculeType:
         for l in ls:
             dihedral = Dihedral.from_top_line(l)
             key = (dihedral.ai, dihedral.aj, dihedral.ak, dihedral.al)
-            if dihedral.funct == FFFUNC["mult_improper_dihedral"]:
+            if dihedral.funct in IMPROPER_DIHEDRAL_FFFUNCS:
                 if self.improper_dihedrals.get(key) is None:
                     self.improper_dihedrals[key] = MultipleDihedrals(
                         *key, dihedral.funct, dihedrals={}
                     )
-                self.improper_dihedrals[key].dihedrals[dihedral.periodicity] = dihedral
+                periodicity = dihedral.periodicity
+                if dihedral.funct == FFFUNC["harmonic_improper_dihedral"]:
+                    # no periodicity, c2 is the B-state xi0
+                    periodicity = ""
+                self.improper_dihedrals[key].dihedrals[periodicity] = dihedral
             else:
                 if self.proper_dihedrals.get(key) is None:
                     self.proper_dihedrals[key] = MultipleDihedrals(
@@ -488,8 +493,14 @@ class MoleculeType:
             for key, improper in previous_residuetype.improper_dihedrals.items():
                 # find the dihedral with +N
                 if any(["+" in k for k in key]):
+                    # +X refers to atom X of this residue, not only to +N
                     nr_key: ImproperDihedralId = tuple(
-                        atom.nr if "+" in x else prev_atomname_to_nr.get(x) for x in key
+                        (
+                            atomname_to_nr.get(x.replace("+", ""))
+                            if "+" in x
+                            else prev_atomname_to_nr.get(x)
+                        )
+                        for x in key
                     )  # pyright: ignore
                     if None in nr_key:
                         m = f"Improper dihedral {key} with {nr_key} not found in residue {atom.residue}."
@@ -503,8 +514,14 @@ class MoleculeType:
             for key, improper in next_residuetype.improper_dihedrals.items():
                 # find the dihedral with -C
                 if any(["-" in k for k in key]):
+                    # -X refers to atom X of this residue, e.g. -O in charmm
                     nr_key = tuple(
-                        atom.nr if "-" in x else next_atomname_to_nr.get(x) for x in key
+                        (
+                            atomname_to_nr.get(x.replace("-", ""))
+                            if "-" in x
+                            else next_atomname_to_nr.get(x)
+                        )
+                        for x in key
                     )  # pyright: ignore
                     if None in nr_key:
                         m = f"Improper dihedral {key} with {nr_key} not found in residue {atom.residue}."
@@ -591,11 +608,11 @@ class MoleculeType:
                     periodicity = improper.c2
                 self.improper_dihedrals[key] = MultipleDihedrals(
                     *key,
-                    FFFUNC["mult_improper_dihedral"],
+                    ff.improper_funct,
                     dihedrals={
                         "": Dihedral(
                             *key,
-                            FFFUNC["mult_improper_dihedral"],
+                            ff.improper_funct,
                             c0=improper.c0,
                             c1=improper.c1,
                             periodicity=periodicity,
@@ -718,12 +735,13 @@ class MoleculeType:
             dihedrals.ak = ak  # type: ignore
             dihedrals.al = al  # type: ignore
 
-            for dihedral in dihedrals.dihedrals.values():
+            # keep the keys, harmonic impropers are stored under ""
+            for periodicity, dihedral in dihedrals.dihedrals.items():
                 dihedral.ai = ai  # type: ignore
                 dihedral.aj = aj  # type: ignore
                 dihedral.ak = ak  # type: ignore
                 dihedral.al = al  # type: ignore
-                new_dihedrals[dihedral.periodicity] = dihedral
+                new_dihedrals[periodicity] = dihedral
             dihedrals.dihedrals = new_dihedrals
 
             new_multiple_dihedrals[(ai, aj, ak, al)] = dihedrals
